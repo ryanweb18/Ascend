@@ -1,0 +1,9 @@
+# One-click deploy of the multiplayer server on Render (free tier works).
+services:
+  - type: web
+    name: ascend-game
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz

@@ -1,0 +1,5 @@
+# Netlify hosts the website (the files in /public).
+# The multiplayer server (server.js) runs separately — see README.md.
+[build]
+  publish = "public"
+  command = ""

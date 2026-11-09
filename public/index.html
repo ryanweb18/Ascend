@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ascend</title>
+  <meta name="description" content="A calm card game about putting your rack in order. Play online with 2–4 friends.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23f1e4c6'/><rect x='4' y='21' width='24' height='5' fill='%233d6a98'/><rect x='7' y='14' width='18' height='5' fill='%23d4a03a'/><rect x='10' y='7' width='12' height='5' fill='%23c4493c'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Courier+Prime:wght@400;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true"><div class="rays"></div><div class="grain"></div></div>
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span>Ascend</div>
+    <div class="topbar-mid" id="topbarMid"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="rulesBtn" title="How to play" aria-label="How to play">?</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Sound settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
+      <div class="popover" id="soundPop" hidden>
+        <label class="row"><span>Music</span><input type="checkbox" id="musicOn"></label>
+        <input type="range" id="musicVol" min="0" max="1" step="0.01" aria-label="Music volume">
+        <label class="row"><span>Sound effects</span><input type="checkbox" id="sfxOn"></label>
+        <input type="range" id="sfxVol" min="0" max="1" step="0.01" aria-label="Effects volume">
+      </div>
+    </div>
+  </header>
+
+  <!-- Home -->
+  <main class="screen" id="home">
+    <section class="hero">
+      <p class="ribbon">The Card Game of Skill &amp; Luck</p>
+      <h1>Ascend!</h1>
+      <p class="lede">Draw, swap and stack ten cards from lowest to highest. First to a perfect climb wins the round!</p>
+      <p class="ages">For 2 to 4 players &middot; Ages 8 to Adult</p>
+      <div class="glass home-card">
+        <label class="field">
+          <span>Your name</span>
+          <input id="nameInput" maxlength="16" autocomplete="nickname" placeholder="Write your name here">
+        </label>
+        <button class="btn primary big" id="createBtn">Create a room</button>
+        <div class="divider"><span>or join a friend</span></div>
+        <div class="join-row">
+          <input id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Room code">
+          <button class="btn" id="joinBtn">Join</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Lobby -->
+  <main class="screen" id="lobby" hidden>
+    <section class="glass lobby-card">
+      <p class="eyebrow">Room code</p>
+      <div class="code-row">
+        <div class="room-code" id="lobbyCode">----</div>
+        <button class="btn small ghost" id="copyLink">Copy invite link</button>
+      </div>
+      <p class="muted small">Send the code or link to your friends. 2–4 players.</p>
+      <ul class="seats" id="seats"></ul>
+      <div class="host-controls" id="hostControls">
+        <button class="btn small ghost" id="addBotBtn">+ Add a bot</button>
+        <label class="select-wrap">Play to
+          <select id="targetSel">
+            <option value="100">100</option><option value="200">200</option>
+            <option value="300">300</option><option value="500">500</option>
+          </select>
+        </label>
+        <label class="toggle"><input type="checkbox" id="bonusChk"> Run bonuses</label>
+      </div>
+      <p class="muted small" id="lobbyNote"></p>
+      <div class="lobby-actions">
+        <button class="btn ghost" id="leaveBtn">Leave</button>
+        <button class="btn primary" id="startBtn">Start game</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Game -->
+  <main class="screen game" id="game" hidden>
+    <section class="opponents" id="opponents"></section>
+
+    <section class="board">
+      <div class="glass rack-panel">
+        <div class="rack-head">
+          <div>
+            <div class="rack-title" id="myName">Your rack</div>
+            <div class="muted small" id="mySeq"></div>
+          </div>
+          <div class="score-chip" id="myScore">0</div>
+        </div>
+        <ol class="rack" id="rack"></ol>
+        <div class="rack-foot">&#9650; Lowest at the bottom, highest at the top &#9650;</div>
+      </div>
+
+      <div class="table">
+        <div class="turn-banner" id="turnBanner"></div>
+        <div class="piles">
+          <button class="pile deck" id="deckPile" aria-label="Draw from the deck">
+            <div class="card-back"><span class="mark"><i></i><i></i><i></i></span></div>
+            <div class="pile-label">Deck · <span id="deckCount">0</span></div>
+          </button>
+          <div class="held-zone" id="heldZone"></div>
+          <button class="pile discard" id="discardPile" aria-label="Take the discard">
+            <div class="face-slot" id="discardFace"></div>
+            <div class="pile-label">Discard</div>
+          </button>
+        </div>
+        <div class="actions" id="actions"></div>
+        <ul class="log" id="log"></ul>
+        <div class="reactions" id="reactions"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Overlays -->
+  <div class="overlay" id="roundOverlay" hidden>
+    <div class="glass modal" id="roundModal"></div>
+  </div>
+
+  <div class="overlay" id="rulesOverlay" hidden>
+    <div class="glass modal rules">
+      <h2>How to play</h2>
+      <ol>
+        <li><b>Goal:</b> arrange the 10 cards in your rack so they climb from lowest (bottom) to highest (top).</li>
+        <li>Each round you're dealt 10 random cards. You can't shuffle them around — you can only <b>swap</b> one card at a time.</li>
+        <li>On your turn, take the <b>top discard</b> or <b>draw from the deck</b>.
+          <ul>
+            <li>A discard you take <b>must</b> replace a card in your rack.</li>
+            <li>A deck card can replace a card, or be discarded right away.</li>
+          </ul>
+        </li>
+        <li>The card you replace goes face-up on the discard pile.</li>
+        <li>The first player whose whole rack climbs in order <b>ascends</b> and ends the round.</li>
+      </ol>
+      <h3>Scoring</h3>
+      <ul>
+        <li>Ascending: <b>75 points</b>.</li>
+        <li>Everyone else: <b>5 points</b> for each card in order counting up from the bottom slot, until the first break.</li>
+        <li>Run bonuses (optional): the round winner earns extra for their longest run of consecutive numbers — 3 in a row +50, 4 +100, 5 +200, 6+ +400.</li>
+        <li>First to the target score (500 by default) wins.</li>
+      </ul>
+      <p class="muted small">Deck size: 2 players use cards 1–40, 3 players 1–50, 4 players 1–60.</p>
+      <button class="btn primary" id="closeRules">Got it</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="config.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
