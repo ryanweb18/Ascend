@@ -261,6 +261,8 @@ select { padding: 4px 8px; }
   background: hsl(var(--hue) 42% 50%); color: #fbf3df; border: 2px solid var(--ink);
   text-shadow: 1px 1px 0 rgba(43,36,32,.55);
 }
+/* 2-player: cards that are part of your current run get a mustard ring */
+.slot.in-run .card .num { box-shadow: 0 0 0 3px var(--mustard), 0 0 0 5px var(--ink); }
 .slot.pickable .card { cursor: pointer; }
 .slot.pickable .card:hover { transform: translateX(5px) rotate(-.6deg); box-shadow: 4px 5px 0 rgba(20,16,12,.65); background-color: #fff8e6; }
 .slot.pickable .card:active { transform: translate(2px, 2px); box-shadow: 0 0 0 transparent; }

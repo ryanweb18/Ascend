@@ -43,6 +43,7 @@ Notes:
 - On your turn, take the top discard **or** draw from the deck. You must place a discard you take. A deck card can be placed or thrown away.
 - The card you replace goes onto the discard pile.
 - Scoring: going out ("ascending") earns 75. Everyone else earns 5 points per card in order counting up from the bottom slot. With optional run bonuses, the winner also gets +50/100/200/400 for a run of 3/4/5/6+ consecutive numbers.
+- **2-player games:** to win a round, your rack must also have at least 3 consecutive numbers side by side (like 14, 15, 16).
 - The first player to reach the target score (500 by default) wins.
 
 `npm test` simulates a few hundred bot games to check the rules engine.

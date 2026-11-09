@@ -7,6 +7,8 @@
 //      * A discard you take MUST go into your rack (replacing a card, which is discarded).
 //      * A deck card can go into your rack, or be discarded straight away.
 //  - First player whose rack runs low → high (slot 1 to slot 10) ends the round.
+//    With only 2 players, that rack must ALSO contain a run of at least 3 consecutive
+//    numbers side by side (e.g. 14, 15, 16) — the classic two-player rule.
 //  - Scoring: the winner gets 75. Everyone else gets 5 points per card that is in
 //    ascending order counting up from slot 1 until the first break.
 //  - Optional bonus: the round winner adds points for their longest run of consecutive
@@ -63,6 +65,19 @@ function runBonus(len) {
   if (len === 4) return 100;
   if (len === 3) return 50;
   return 0;
+}
+
+const TWO_PLAYER_RUN = 3;
+
+// Does this rack need a run of 3 to win? (Only in 2-player games.)
+function needsRun(room) {
+  return room.players.length === 2;
+}
+
+// A rack wins if it climbs low → high, plus (2 players) has a run of 3 consecutive numbers.
+function isWinningRack(room, rack) {
+  if (!isAscending(rack)) return false;
+  return !needsRun(room) || longestRun(rack) >= TWO_PLAYER_RUN;
 }
 
 class GameError extends Error {}
@@ -176,7 +191,7 @@ function discardHeld(room, playerId) {
 
 function endTurn(room) {
   const p = currentPlayer(room);
-  if (isAscending(p.rack)) {
+  if (isWinningRack(room, p.rack)) {
     endRound(room, p);
   } else {
     room.turn = (room.turn + 1) % room.players.length;
@@ -216,8 +231,47 @@ function endRound(room, winner) {
 // Splits the number range into 10 bands, one per slot. A card "belongs" in the slot
 // for its band. Once every slot holds a card from its own band the rack is
 // guaranteed to be ascending (bands don't overlap), so this always finishes.
+// With 2 players the band strategy alone can't make a run of 3 (each band holds 4 numbers,
+// so three consecutive numbers can never sit in three different bands). Once the rack is
+// in order, the bot switches to swaps that keep it in order while growing a run.
+function runScore(rack) {
+  let pairs = 0;
+  for (let i = 1; i < rack.length; i++) if (rack[i] === rack[i - 1] + 1) pairs++;
+  return longestRun(rack) * 100 + pairs * 10;
+}
+
+function bestRunSwap(rack, v) {
+  const base = runScore(rack);
+  let best = null, bestScore = base;
+  for (let s = 0; s < rack.length; s++) {
+    const r = rack.slice(); r[s] = v;
+    if (!isAscending(r)) continue;
+    const sc = runScore(r);
+    if (sc > bestScore) { bestScore = sc; best = s; }
+  }
+  return best;
+}
+
 function botPlan(room) {
   const p = currentPlayer(room);
+  if (needsRun(room) && isAscending(p.rack)) {
+    if (!room.held) {
+      const top = room.discard[room.discard.length - 1];
+      if (top !== undefined && bestRunSwap(p.rack, top) !== null) return { action: 'draw', from: 'discard' };
+      return { action: 'draw', from: 'deck' };
+    }
+    const s = bestRunSwap(p.rack, room.held.card);
+    if (s !== null) return { action: 'place', slot: s };
+    if (room.held.from === 'deck') return { action: 'discard' };
+    // Must place a taken discard: pick the least harmful slot.
+    let pick = 0, pickScore = -Infinity;
+    p.rack.forEach((_, i) => {
+      const r = p.rack.slice(); r[i] = room.held.card;
+      const sc = (isAscending(r) ? 1000 : 0) + runScore(r);
+      if (sc > pickScore) { pickScore = sc; pick = i; }
+    });
+    return { action: 'place', slot: pick };
+  }
   const band = room.maxCard / RACK_SIZE;
   const slotFor = v => Math.min(RACK_SIZE - 1, Math.floor((v - 1) / band));
   const fits = (s) => slotFor(p.rack[s]) === s;
@@ -242,6 +296,6 @@ function botPlan(room) {
 }
 
 module.exports = {
-  RACK_SIZE, GameError, deckSizeFor, isAscending, sequenceFromFront, longestRun, runBonus,
+  RACK_SIZE, TWO_PLAYER_RUN, GameError, deckSizeFor, isAscending, isWinningRack, needsRun, sequenceFromFront, longestRun, runBonus,
   startGame, startRound, draw, place, discardHeld, botPlan, currentPlayer, log,
 };

@@ -1,5 +1,9 @@
 // Where the multiplayer server lives.
-// Leave empty when the Node server also serves this page (local play, or hosting everything on Render).
-// When the site is on Netlify, set this to your game server's address, e.g.:
-//   window.ASCEND_SERVER = 'wss://ascend-game.onrender.com';
-window.ASCEND_SERVER = 'wss://ascend-game.onrender.com';
+// When the page is served by the Node server itself (local play, or the Render URL directly),
+// it connects back to that same server. Anywhere else (e.g. Netlify) it uses the Render server.
+(function () {
+  const RENDER_SERVER = 'wss://ascend-game.onrender.com';
+  const host = location.hostname;
+  const servedByGameServer = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.onrender.com');
+  window.ASCEND_SERVER = servedByGameServer ? '' : RENDER_SERVER;
+})();

@@ -77,6 +77,15 @@
   const INK_HUES = [212, 66, 40, 22, 4];
   const hue = (v) => INK_HUES[Math.min(4, Math.floor(((v - 1) / state.maxCard) * 5))];
   const pos = (v) => (v - 1) / Math.max(1, state.maxCard - 1);
+  // Longest run of consecutive numbers side by side: returns { len, start }.
+  const longestRun = (r) => {
+    let best = 1, start = 0, cur = 1;
+    for (let i = 1; i < (r || []).length; i++) {
+      if (r[i] === r[i - 1] + 1) { cur++; if (cur > best) { best = cur; start = i - cur + 1; } } else cur = 1;
+    }
+    return { len: best, start };
+  };
+  const twoPlayerRule = () => state && state.players.length === 2;
   const seqCount = (r) => { if (!r || !r.length) return 0; let n = 1; for (let i = 1; i < r.length; i++) { if (r[i] > r[i - 1]) n++; else break; } return n; };
 
   function bigCard(v, extra = '') {
@@ -156,9 +165,10 @@
     $('startBtn').hidden = !host;
     $('startBtn').disabled = state.players.length < 2;
     const hostName = byId(state.hostId)?.name || 'the host';
-    $('lobbyNote').textContent = host
+    const twoNote = state.players.length === 2 ? ' 2-player rule: you also need 3 numbers in a row (like 14-15-16) to win.' : '';
+    $('lobbyNote').textContent = (host
       ? (state.players.length < 2 ? 'Waiting for at least one more player (or add a bot).' : `Ready when you are. Playing to ${state.settings.target}${state.settings.bonus ? ' with run bonuses' : ''}.`)
-      : `Waiting for ${hostName} to start · playing to ${state.settings.target}${state.settings.bonus ? ' with run bonuses' : ''}.`;
+      : `Waiting for ${hostName} to start · playing to ${state.settings.target}${state.settings.bonus ? ' with run bonuses' : ''}.`) + twoNote;
   }
 
   function renderGame() {
@@ -201,12 +211,20 @@
     $('myName').textContent = you.name;
     $('myScore').textContent = you.score;
     const seq = seqCount(you.rack);
-    $('mySeq').textContent = seq === 10 ? 'Perfect climb!' : `${seq} in order from the bottom · worth ${seq * 5}`;
+    const run = longestRun(you.rack);
+    if (twoPlayerRule()) {
+      $('mySeq').textContent = seq === 10 && run.len < 3
+        ? 'All in order! Now get 3 in a row (like 14-15-16) to win'
+        : `${seq} in order · ${Math.min(run.len, 3)} of 3 in a row`;
+    } else {
+      $('mySeq').textContent = seq === 10 ? 'Perfect climb!' : `${seq} in order from the bottom · worth ${seq * 5}`;
+    }
     document.querySelector('.rack-panel').classList.toggle('turn', myTurn);
     const rack = $('rack'); rack.innerHTML = '';
     const pickable = myTurn && held;
     (you.rack || []).forEach((v, i) => {
-      const li = el('li', 'slot' + (i < seq ? ' in-seq' : '') + (pickable ? ' pickable' : ''));
+      const inRun = twoPlayerRule() && run.len >= 2 && i >= run.start && i < run.start + run.len;
+      const li = el('li', 'slot' + (i < seq ? ' in-seq' : '') + (pickable ? ' pickable' : '') + (inRun ? ' in-run' : ''));
       const label = el('span', 'slot-label', String((i + 1) * 5));
       const card = el('button', 'card', `<span class="num">${v}</span>`);
       card.style.setProperty('--hue', hue(v)); card.style.setProperty('--pos', pos(v));
