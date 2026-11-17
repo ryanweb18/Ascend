@@ -151,6 +151,19 @@
     </div>
   </div>
 
+  <!-- Table talk (chat) -->
+  <button class="chat-toggle" id="chatToggle" hidden aria-controls="chatPanel" aria-expanded="false">
+    Chat <span class="chat-badge" id="chatBadge" hidden>0</span>
+  </button>
+  <aside class="chat-panel" id="chatPanel" hidden aria-label="Chat">
+    <div class="chat-head"><span>Table Talk</span><button class="chat-close" id="chatClose" aria-label="Close chat">&times;</button></div>
+    <ol class="chat-list" id="chatList" aria-live="polite"></ol>
+    <form class="chat-form" id="chatForm" autocomplete="off">
+      <input id="chatInput" maxlength="200" placeholder="Say something..." aria-label="Chat message">
+      <button class="btn small primary" type="submit">Send</button>
+    </form>
+  </aside>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="config.js"></script>

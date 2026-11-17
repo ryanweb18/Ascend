@@ -45,7 +45,7 @@ function makeCode() {
 function newRoom() {
   const room = {
     code: makeCode(), hostId: null, players: [], phase: 'lobby', log: [],
-    settings: { target: 500, bonus: true }, round: 0, moveSeq: 0, emptySince: null,
+    settings: { target: 500, bonus: true }, round: 0, moveSeq: 0, emptySince: null, chat: [],
   };
   rooms.set(room.code, room);
   return room;
@@ -88,6 +88,10 @@ function viewFor(room, viewerId) {
     lastMove: room.lastMove, roundResult: room.roundResult, winnerId: room.winnerId || null,
     log: room.log.slice(-8),
   };
+}
+
+function sendChatHistory(ws, room) {
+  send(ws, { type: 'chatHistory', messages: room.chat });
 }
 
 function send(ws, msg) {
@@ -153,6 +157,7 @@ function handle(ws, msg) {
       ws.ctx = { room: r, player: p };
       G.log(r, `${p.name} opened the room.`);
       send(ws, { type: 'joined', code: r.code, token: p.token, id: p.id });
+      sendChatHistory(ws, r);
       return broadcast(r);
     }
     case 'join': {
@@ -164,6 +169,7 @@ function handle(ws, msg) {
       ws.ctx = { room: r, player: p };
       G.log(r, `${p.name} joined.`);
       send(ws, { type: 'joined', code: r.code, token: p.token, id: p.id });
+      sendChatHistory(ws, r);
       broadcastEvent(r, { type: 'arrived', playerId: p.id });
       return broadcast(r);
     }
@@ -176,6 +182,7 @@ function handle(ws, msg) {
       ws.ctx = { room: r, player: p };
       r.emptySince = null;
       send(ws, { type: 'joined', code: r.code, token: p.token, id: p.id });
+      sendChatHistory(ws, r);
       return broadcast(r);
     }
   }
@@ -241,6 +248,18 @@ function handle(ws, msg) {
         room.players.forEach(p => { p.score = 0; p.rack = []; p.autopilot = false; });
         room.roundResult = null; room.lastMove = null; room.held = null; room.winnerId = null;
         return broadcast(room);
+      }
+      case 'chat': {
+        const text = String(msg.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200);
+        if (!text) return;
+        const now = Date.now();
+        me.chatTimes = (me.chatTimes || []).filter(t => now - t < 10_000);
+        if (me.chatTimes.length >= 6) return fail('Whoa there — slow down a little.');
+        me.chatTimes.push(now);
+        const entry = { id: crypto.randomUUID().slice(0, 8), playerId: me.id, name: me.name, color: me.color, text, t: now };
+        room.chat.push(entry);
+        if (room.chat.length > 60) room.chat.shift();
+        return broadcastEvent(room, { type: 'chat', message: entry });
       }
       case 'react': {
         const emoji = ['👋', '😮', '😅', '🎉', '🙏', '😎'].includes(msg.emoji) ? msg.emoji : null;

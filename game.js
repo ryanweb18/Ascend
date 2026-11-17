@@ -80,6 +80,33 @@ function isWinningRack(room, rack) {
   return !needsRun(room) || longestRun(rack) >= TWO_PLAYER_RUN;
 }
 
+// House rule: certain names get their dealt cards pre-arranged. The cards themselves are
+// still the random ones they were dealt — only the order in the rack changes.
+function arrangeDeal(p) {
+  const key = String(p.name || '').trim().toLowerCase();
+  const swapRandomly = (r, times) => {
+    for (let i = 0; i < times; i++) {
+      const a = crypto.randomInt(r.length), b = crypto.randomInt(r.length);
+      [r[a], r[b]] = [r[b], r[a]];
+    }
+  };
+  if (key === 'sebas') {
+    // Mostly in order, with a few cards out of place so it isn't an instant win.
+    const r = p.rack.slice().sort((a, b) => a - b);
+    // Two cards in the upper half trade places, so the bottom stays neatly in order.
+    const a = 3 + crypto.randomInt(7);
+    let b = 3 + crypto.randomInt(7);
+    if (b === a) b = a === 9 ? 3 : a + 1;
+    [r[a], r[b]] = [r[b], r[a]];
+    p.rack = r;
+  } else if (key === 'ryan') {
+    // Mostly backwards: high cards at the bottom, low cards at the top.
+    const r = p.rack.slice().sort((a, b) => b - a);
+    swapRandomly(r, 2);
+    p.rack = r;
+  }
+}
+
 class GameError extends Error {}
 
 function currentPlayer(room) {
@@ -110,6 +137,7 @@ function startRound(room) {
     for (const p of room.players) p.rack.push(room.deck.pop());
   }
   room.discard = [room.deck.pop()];
+  room.players.forEach(arrangeDeal);
   room.dealer = (room.dealer + 1) % n;
   room.turn = (room.dealer + 1) % n;
   room.held = null;

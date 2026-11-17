@@ -15,6 +15,7 @@
     del(k) { try { sessionStorage.removeItem(k); } catch {} },
   };
 
+  const chat = { messages: [], unread: 0 };
   let ws, state = null, prev = null, reconnectDelay = 500, roundKey = null;
   let session = tabStore.get('ascend.session');
 
@@ -63,6 +64,18 @@
       case 'arrived':
         if (state && msg.playerId !== state.you) Sound.play('join');
         break;
+      case 'chatHistory':
+        chat.messages = msg.messages || []; chat.unread = 0; renderChat();
+        break;
+      case 'chat':
+        chat.messages.push(msg.message);
+        if (chat.messages.length > 60) chat.messages.shift();
+        if (state && msg.message.playerId !== state.you) {
+          Sound.play('chat');
+          if ($('chatPanel').hidden) chat.unread++;
+        }
+        renderChat();
+        break;
       case 'reaction':
         showReaction(msg.playerId, msg.emoji); Sound.play('pop');
         break;
@@ -102,6 +115,8 @@
 
   function showScreen(name) {
     for (const id of ['home', 'lobby', 'game']) $(id).hidden = id !== name;
+    $('chatToggle').hidden = name === 'home';
+    if (name === 'home') { $('chatPanel').hidden = true; chat.messages = []; chat.unread = 0; renderChat(); }
     if (name !== 'game') $('roundOverlay').hidden = true;
     if (name === 'home') { $('topbarMid').innerHTML = ''; history.replaceState(null, '', location.pathname); }
   }
@@ -347,6 +362,37 @@
     ov.hidden = false;
   }
 
+  // ---------- Chat ----------
+  function chatColor(m) {
+    const p = state && state.players.find(x => x.id === m.playerId);
+    if (p && state.phase !== 'lobby') return p.color;
+    const i = state ? state.players.findIndex(x => x.id === m.playerId) : -1;
+    return ['#c4493c', '#3d6a98', '#d4a03a', '#6f8a55'][i] || '#85735f';
+  }
+  function renderChat() {
+    const list = $('chatList');
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    list.innerHTML = '';
+    if (!chat.messages.length) list.appendChild(el('li', 'chat-empty', 'No messages yet. Say hi!'));
+    for (const m of chat.messages) {
+      const li = el('li', 'chat-msg' + (state && m.playerId === state.you ? ' mine' : ''));
+      const who = el('span', 'chat-who'); who.textContent = m.name; who.style.color = chatColor(m);
+      const text = el('span', 'chat-text'); text.textContent = m.text;
+      li.append(who, text);
+      list.appendChild(li);
+    }
+    if (nearBottom || !$('chatPanel').hidden) list.scrollTop = list.scrollHeight;
+    const badge = $('chatBadge');
+    badge.hidden = chat.unread === 0;
+    badge.textContent = chat.unread > 9 ? '9+' : String(chat.unread);
+  }
+  function setChatOpen(open) {
+    $('chatPanel').hidden = !open;
+    $('chatToggle').setAttribute('aria-expanded', String(open));
+    $('chatToggle').classList.toggle('open', open);
+    if (open) { chat.unread = 0; renderChat(); setTimeout(() => $('chatInput').focus(), 0); }
+  }
+
   function showReaction(playerId, emoji) {
     let host = document.querySelector(`.opp[data-pid="${playerId}"]`);
     if (!host && state && playerId === state.you) host = document.querySelector('.rack-panel');
@@ -430,6 +476,18 @@
     else if (state.held && k === 'x' && state.held.from === 'deck') { Sound.play('discard'); send({ type: 'discard' }); }
     else if (state.held && /^[0-9]$/.test(k)) { const slot = k === '0' ? 9 : Number(k) - 1; Sound.play('place'); send({ type: 'place', slot }); }
   });
+
+  // Chat wiring
+  $('chatToggle').onclick = () => { Sound.play('click'); setChatOpen($('chatPanel').hidden); };
+  $('chatClose').onclick = () => { Sound.play('click'); setChatOpen(false); };
+  $('chatForm').onsubmit = (e) => {
+    e.preventDefault();
+    const text = $('chatInput').value.trim();
+    if (!text) return;
+    send({ type: 'chat', text });
+    Sound.play('click');
+    $('chatInput').value = '';
+  };
 
   // Rules
   $('rulesBtn').onclick = () => { Sound.play('click'); $('rulesOverlay').hidden = false; };

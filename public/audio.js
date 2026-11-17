@@ -1,13 +1,12 @@
 // Ascend — all sound is synthesised live with the Web Audio API (no audio files needed).
-// Old-fashioned mechanical clicks, paper card sounds, a desk bell, and a music-box tune
-// playing through a warm "old record" filter with gentle crackle.
+// Old-fashioned mechanical clicks, paper card sounds, a desk bell, and slow ambient piano.
 const Sound = (() => {
   const PREFS_KEY = 'ascend.sound';
   let prefs = { musicOn: true, sfxOn: true, music: 0.5, sfx: 0.75 };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch {}
   const save = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {} };
 
-  let ctx, master, sfxBus, musicBus, room, crackleSrc, musicTimer, musicPlaying = false;
+  let ctx, master, sfxBus, musicBus, room, musicTimer, musicPlaying = false;
   let noiseBuf;
   const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -36,13 +35,11 @@ const Sound = (() => {
     const sfxSend = ctx.createGain(); sfxSend.gain.value = 0.4;
     sfxBus.connect(sfxSend).connect(room);
 
-    // Music goes through a band-limited "old phonograph" filter.
+    // Music: gentle warmth filter, its own long hall reverb is added in startMusic().
     musicBus = ctx.createGain(); musicBus.gain.value = 0;
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 180;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.9;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 45;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5000;
     musicBus.connect(hp).connect(lp).connect(master);
-    const musicSend = ctx.createGain(); musicSend.gain.value = 0.7;
-    lp.connect(musicSend).connect(room);
 
     if (prefs.musicOn) startMusic();
   }
@@ -120,6 +117,12 @@ const Sound = (() => {
       burst({ dur: 0.015, vol: 0.18, freq: 3000, q: 5, when: 0.02 });
     },
     yourTurn() { bell(1568, { vol: 0.12 }); bell(1568, { vol: 0.07, when: 0.18 }); },
+    // Two typewriter keys and the little carriage bell.
+    chat() {
+      burst({ dur: 0.01, vol: 0.3, type: 'highpass', freq: 2500, q: 0.7 });
+      burst({ dur: 0.01, vol: 0.25, type: 'highpass', freq: 2800, q: 0.7, when: 0.09 });
+      bell(2637, { vol: 0.05, when: 0.2, dur: 0.9 });
+    },
     join() { bell(1318.5, { vol: 0.09, dur: 1.2 }); bell(1046.5, { vol: 0.09, dur: 1.6, when: 0.28 }); }, // ding-dong
     error() { tone({ freq: 110, dur: 0.22, vol: 0.09, type: 'square' }); tone({ freq: 116, dur: 0.22, vol: 0.07, type: 'square' }); },
     pop() { tone({ freq: 700, glideTo: 520, dur: 0.07, vol: 0.18, type: 'triangle' }); burst({ dur: 0.01, vol: 0.2, freq: 2500, q: 4 }); }, // wood block
@@ -135,92 +138,111 @@ const Sound = (() => {
     roundEnd() { bell(1046.5, { vol: 0.08 }); bell(1318.5, { vol: 0.07, when: 0.2 }); bell(1568, { vol: 0.07, when: 0.4, dur: 2 }); },
   };
 
-  // ---- Music: an original little music-box waltz over soft oom-pah-pah chords ----
-  const BEAT = 0.72; // seconds per beat, 3 beats per bar
-  // [midi, beats] — 0 = rest
-  const MELODY = [
-    [76, 1], [79, 1], [84, 1], [83, 2], [79, 1], [81, 1], [79, 1], [76, 1], [74, 3],
-    [77, 1], [81, 1], [86, 1], [84, 2], [81, 1], [79, 1], [76, 1], [74, 1], [72, 3],
-    [79, 1], [76, 1], [79, 1], [81, 2], [77, 1], [76, 1], [72, 1], [76, 1], [74, 3],
-    [76, 1], [77, 1], [79, 1], [81, 1], [83, 1], [84, 1], [86, 1], [83, 1], [79, 1], [84, 3],
-    [0, 3], [0, 3],
+  // ---- Music: slow, spacious generative piano (original, never loops exactly) ----
+  // Soft felt-piano chords, sparse broken arpeggios and a wandering melody with lots of
+  // silence, played through a long hall reverb. Every pass is a little different.
+  const BEAT = 0.95;                 // ~63 bpm
+  const CHORD_BEATS = 8;             // each chord rings for two slow bars
+  const SECTIONS = [
+    // [bass, ...voicing] in MIDI notes
+    [[41, 53, 57, 60, 64], [45, 52, 55, 60, 64], [36, 52, 55, 59, 64], [43, 50, 55, 59, 62]], // Fmaj7  Am7  Cmaj7  G6
+    [[38, 53, 57, 60, 64], [41, 53, 57, 60, 65], [45, 55, 60, 64, 67], [40, 52, 55, 59, 62]], // Dm9  F  Am7  Em7
+    [[41, 57, 60, 64, 67], [43, 55, 59, 62, 69], [45, 57, 60, 64, 71], [36, 55, 60, 64, 67]], // Fmaj9  G6/9  Am9  C
   ];
-  // one chord per bar: [bass, chord tones...]
-  const BARS = [
-    [48, 64, 67], [43, 62, 67], [45, 64, 69], [43, 62, 67],
-    [41, 65, 69], [41, 65, 69], [43, 64, 67], [48, 64, 67],
-    [48, 64, 67], [41, 65, 69], [48, 64, 67], [43, 62, 67],
-    [48, 64, 67], [41, 65, 69], [43, 62, 65], [48, 64, 67],
-    [41, 65, 69], [48, 64, 67],
+  const SCALE = [60, 62, 64, 67, 69, 71, 72, 74, 76, 79, 81, 83, 84]; // mostly pentatonic, gentle
+  const ARPS = [
+    [[1, 1], [2, 2], [3, 3], [5, 2], [6, 3]],
+    [[0.5, 2], [1.5, 3], [2.5, 4], [4.5, 3], [5.5, 2]],
+    [[2, 1], [2.5, 2], [3, 3], [3.5, 4], [6, 3]],
+    [[1, 3], [3, 2], [5, 4]],
+    [],
   ];
+  let musicReverb, nextChordAt = 0, sectionIdx = 0, chordIdx = 0, melodyIdx = 7, passes = 0;
 
-  function musicBoxNote(m, t, vol) {
-    // a tine: pure tone + bright quick-fading overtone
-    [[1, 1, 2.2], [4, 0.18, 0.25], [6.9, 0.05, 0.1]].forEach(([r, a, d]) => {
+  function piano(m, t, vol, len = 4) {
+    // A soft "felt" piano: a few harmonics, quick attack, long fading tail, darkening over time.
+    const f = mtof(m);
+    const out = ctx.createGain();
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(Math.min(4200, 900 + f * 3), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.2), t + len * 0.6);
+    out.gain.setValueAtTime(0, t);
+    out.gain.linearRampToValueAtTime(vol, t + 0.008);
+    out.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.5);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    lp.connect(out).connect(musicBus);
+    out.connect(musicReverb);
+    [[1, 1, 0], [2, 0.32, 3], [3, 0.1, -4], [4, 0.04, 2]].forEach(([r, a, cents]) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = 'sine'; o.frequency.value = mtof(m) * r;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * a, t + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-      o.connect(g).connect(musicBus); o.start(t); o.stop(t + d + 0.05);
+      o.type = r === 1 ? 'triangle' : 'sine';
+      o.frequency.value = f * r; o.detune.value = cents;
+      g.gain.value = a;
+      o.connect(g).connect(lp);
+      o.start(t); o.stop(t + len + 0.1);
     });
   }
-  function softNote(m, t, dur, vol, type = 'triangle') {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.value = mtof(m);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(musicBus); o.start(t); o.stop(t + dur + 0.05);
+
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const human = () => (Math.random() - 0.5) * 0.04;
+
+  function playChord(chord, t) {
+    const [bass, ...voice] = chord;
+    const dur = CHORD_BEATS * BEAT;
+    // left hand: low bass note, sometimes doubled softly an octave up
+    piano(bass, t, 0.13, dur + 2);
+    if (Math.random() < 0.5) piano(bass + 12, t + 0.03, 0.05, dur);
+    // a soft block chord on some passes, otherwise a broken arpeggio
+    if (Math.random() < 0.3) voice.forEach((n, i) => piano(n, t + i * 0.025 + human(), 0.04, dur));
+    for (const [beat, i] of pick(ARPS)) piano(voice[i % voice.length], t + beat * BEAT + human(), 0.045 + Math.random() * 0.02, 4.5);
+    // right hand melody: a few notes wandering by step, often resting entirely
+    if (Math.random() < 0.7) {
+      const spots = [0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7].filter(() => Math.random() < 0.33).slice(0, 4);
+      for (const beat of spots) {
+        melodyIdx = Math.max(3, Math.min(SCALE.length - 1, melodyIdx + pick([-2, -1, -1, 0, 1, 1, 2])));
+        const note = SCALE[melodyIdx];
+        piano(note, t + beat * BEAT + human(), 0.07 + Math.random() * 0.03, 5);
+        if (Math.random() < 0.12) piano(note + 12, t + beat * BEAT + 0.01, 0.025, 4); // shimmer
+      }
+    }
   }
 
-  function scheduleLoop() {
+  function scheduleMusic() {
     if (!musicPlaying) return;
-    const start = ctx.currentTime + 0.15;
-    let beat = 0;
-    for (const [m, len] of MELODY) {
-      if (m) musicBoxNote(m, start + beat * BEAT + (Math.random() * 0.012), 0.11);
-      beat += len;
+    const now = ctx.currentTime;
+    if (nextChordAt < now + 0.1) nextChordAt = now + 0.3;
+    const section = SECTIONS[sectionIdx];
+    playChord(section[chordIdx], nextChordAt);
+    nextChordAt += CHORD_BEATS * BEAT;
+    chordIdx++;
+    if (chordIdx >= section.length) {
+      chordIdx = 0; passes++;
+      // move to another section every couple of passes, sometimes leave a breath of silence
+      if (passes % 2 === 0) sectionIdx = (sectionIdx + 1 + Math.floor(Math.random() * (SECTIONS.length - 1))) % SECTIONS.length;
+      if (Math.random() < 0.25) nextChordAt += CHORD_BEATS * BEAT * 0.5;
     }
-    BARS.forEach(([bass, ...chord], bar) => {
-      const t = start + bar * 3 * BEAT;
-      softNote(bass, t, BEAT * 1.6, 0.12, 'sine');                 // oom
-      for (const b of [1, 2]) chord.forEach(c => softNote(c - 12, t + b * BEAT, BEAT * 0.7, 0.035)); // pah pah
-    });
-    const loopSeconds = BARS.length * 3 * BEAT;
-    musicTimer = setTimeout(scheduleLoop, loopSeconds * 1000 - 150);
-  }
-
-  // Old-record crackle and hiss, looping quietly under the music.
-  function startCrackle() {
-    const len = ctx.sampleRate * 6;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) {
-      d[i] = (Math.random() * 2 - 1) * 0.012; // hiss
-      if (Math.random() < 0.0004) d[i] += (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.5); // pops
-    }
-    crackleSrc = ctx.createBufferSource(); crackleSrc.buffer = buf; crackleSrc.loop = true;
-    const g = ctx.createGain(); g.gain.value = 0.35;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5000;
-    crackleSrc.connect(lp).connect(g).connect(musicBus);
-    crackleSrc.start();
+    musicTimer = setTimeout(scheduleMusic, Math.max(50, (nextChordAt - ctx.currentTime - 1) * 1000));
   }
 
   function startMusic() {
     if (!ctx || musicPlaying) return;
     musicPlaying = true;
+    if (!musicReverb) {
+      musicReverb = ctx.createConvolver();
+      musicReverb.buffer = impulse(5.5, 2.4);
+      const wet = ctx.createGain(); wet.gain.value = 0.8;
+      musicReverb.connect(wet).connect(musicBus);
+    }
     musicBus.gain.cancelScheduledValues(ctx.currentTime);
-    musicBus.gain.setTargetAtTime(prefs.music, ctx.currentTime, 0.8);
-    startCrackle();
-    scheduleLoop();
+    musicBus.gain.setTargetAtTime(prefs.music, ctx.currentTime, 1.2);
+    nextChordAt = 0;
+    scheduleMusic();
   }
 
   function stopMusic() {
     if (!ctx || !musicPlaying) return;
     musicPlaying = false;
     clearTimeout(musicTimer);
-    musicBus.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
-    const src = crackleSrc; crackleSrc = null;
-    setTimeout(() => { try { src.stop(); } catch {} }, 1500);
+    musicBus.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
   }
 
   return {
